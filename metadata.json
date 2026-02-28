@@ -1,0 +1,9 @@
+{
+  "name": "Remix1: Nkaisosela Suppliers \u0026 General Dealers",
+  "description": "Official portal for Nkaisosela Suppliers \u0026 General Dealers Ltd - Empowering success in the digital era.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
