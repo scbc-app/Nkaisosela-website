@@ -1,4 +1,3 @@
-
 import { SheetRow, SheetMetadata, AppContent, SpreadsheetUrls } from "../types";
 
 export class SpreadsheetService {
@@ -20,11 +19,17 @@ export class SpreadsheetService {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
+        // Add origin to the payload
+        const payloadWithOrigin = {
+          ...payload,
+          origin: window.location.origin
+        };
+
         await fetch(url, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payloadWithOrigin),
           signal: controller.signal
         });
         
@@ -60,7 +65,11 @@ export class SpreadsheetService {
     if (!url) throw new Error("Cloud Proxy URL is not configured");
     
     try {
-      const response = await fetch(url);
+      // Add origin as query parameter for GET request
+      const origin = window.location.origin;
+      const urlWithOrigin = `${url}?origin=${encodeURIComponent(origin)}`;
+      
+      const response = await fetch(urlWithOrigin);
       if (!response.ok) throw new Error("Failed to connect to spreadsheet cloud");
       const db = await response.json();
 

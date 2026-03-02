@@ -17,12 +17,16 @@ import AIChat from './components/AIChat';
 import SettingsView from './components/SettingsView';
 import SignInModal from './components/SignInModal';
 
-const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4YNm0x9TxIXP9LJDdRgTeXto4HvelvwhlSBsKHKf0cS5XnYO0QdgGLjy8V7O6YXBa/exec";
+const APPSCRIPT_URL = import.meta.env.VITE_APPSCRIPT_URL;
+
+if (!APPSCRIPT_URL) {
+  console.error("VITE_APPSCRIPT_URL environment variable is not set");
+}
 
 const App: React.FC = () => {
   const navigate = useNavigate();
   const getStoredUrls = (): SpreadsheetUrls => {
-    return { scriptUrl: DEFAULT_SCRIPT_URL };
+    return { scriptUrl: APPSCRIPT_URL || '' };
   };
 
   const [state, setState] = useState<AppState>({

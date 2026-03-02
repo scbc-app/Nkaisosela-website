@@ -1,8 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, Sparkles, MessageCircle, RotateCcw } from 'lucide-react';
 import { SheetRow, ChatMessage } from '../types';
-import { geminiService } from '../services/geminiService';
 
 interface AIChatProps {
   data: SheetRow[];
@@ -31,13 +29,15 @@ const AIChat: React.FC<AIChatProps> = ({ data }) => {
     setIsLoading(true);
 
     try {
-      const history = messages.map(m => ({ role: m.role, text: m.text }));
-      const response = await geminiService.chatWithData(userMessage, data || [], history);
-      setMessages(prev => [...prev, { role: 'model', text: response || "I'm not sure how to answer that." }]);
+      // Simulate AI response since Gemini is disabled
+      setTimeout(() => {
+        const response = `I understand you're asking about: "${userMessage}". This is a demo response. To enable real AI features, please configure your Gemini API key.`;
+        setMessages(prev => [...prev, { role: 'model', text: response }]);
+        setIsLoading(false);
+      }, 1000);
     } catch (err) {
       console.error("Chat Error:", err);
       setMessages(prev => [...prev, { role: 'model', text: "Error connecting to AI service." }]);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -56,10 +56,10 @@ const AIChat: React.FC<AIChatProps> = ({ data }) => {
               <Sparkles size={20} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Gemini Intelligence</h3>
-              <p className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                ACTIVE ANALYST
+              <h3 className="text-sm font-bold text-slate-800">AI Intelligence (Demo Mode)</h3>
+              <p className="text-[10px] text-amber-500 font-bold flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                DEMO MODE - NO API KEY
               </p>
             </div>
           </div>
@@ -113,7 +113,7 @@ const AIChat: React.FC<AIChatProps> = ({ data }) => {
           <div className="relative group">
             <input 
               type="text" 
-              placeholder="Ask me to 'summarize revenue' or 'show all Active items'..."
+              placeholder="Ask me to 'summarize revenue' or 'show all Active items'... (Demo Mode)"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -129,7 +129,7 @@ const AIChat: React.FC<AIChatProps> = ({ data }) => {
             </button>
           </div>
           <p className="text-[10px] text-center text-slate-400 mt-3 font-medium uppercase tracking-widest">
-            Gemini Flash Intelligence • {(data || []).length} records in context
+            Demo Mode • {(data || []).length} records in context
           </p>
         </div>
       </div>
