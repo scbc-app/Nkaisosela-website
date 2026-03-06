@@ -27,7 +27,23 @@ export class AuthService {
   static getStoredUser(): UserAccount | null {
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      
+      const userData = JSON.parse(stored);
+      
+      // Professional Security: Session Timeout Check (4 Hours)
+      if (userData.loginTime) {
+        const loginTime = new Date(userData.loginTime).getTime();
+        const now = new Date().getTime();
+        const hoursElapsed = (now - loginTime) / (1000 * 60 * 60);
+        
+        if (hoursElapsed > 4) {
+          this.logout();
+          return null; // Session expired
+        }
+      }
+      
+      return userData;
     } catch {
       return null;
     }

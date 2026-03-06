@@ -33,9 +33,10 @@ interface SettingsViewProps {
   onUpdateUrl: (url: string) => void;
   currentUrl: string;
   content: AppContent;
+  onOptimisticUpdate?: (category: string, data: any, isDelete?: boolean) => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ onUpdateUrl, currentUrl, content }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ onUpdateUrl, currentUrl, content, onOptimisticUpdate }) => {
   const [url, setUrl] = useState(currentUrl);
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'cloud' | 'company' | 'users' | 'site'>('cloud');
@@ -158,12 +159,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onUpdateUrl, currentUrl, co
     try {
       console.log("Saving user to:", currentUrl);
       // Use Email as ID for the spreadsheet record
-      const success = await spreadsheetService.saveRecord(currentUrl, 'users', {
+      const optimisticUser = {
         ...userFormData,
         id: userFormData.Email
-      });
+      };
+      
+      const success = await spreadsheetService.saveRecord(currentUrl, 'users', optimisticUser);
 
       if (success) {
+        if (onOptimisticUpdate) onOptimisticUpdate('users', optimisticUser);
         setIsUserModalOpen(false);
         // Force a refresh of the data
         onUpdateUrl(currentUrl);
@@ -183,6 +187,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onUpdateUrl, currentUrl, co
     if (!currentUrl) return;
     if (!confirm(`Are you sure you want to remove ${email}?`)) return;
 
+    if (onOptimisticUpdate) onOptimisticUpdate('users', { id: email }, true);
     setIsSaving(true);
     const success = await spreadsheetService.deleteRecord(currentUrl, 'users', email);
     setIsSaving(false);
@@ -199,6 +204,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onUpdateUrl, currentUrl, co
       alert("Please link your Google Spreadsheet first.");
       return;
     }
+    
+    // Optimistic update for all settings
+    if (onOptimisticUpdate) {
+      Object.entries(settings).forEach(([key, value]) => {
+        onOptimisticUpdate('settings', { key, value });
+      });
+    }
+    
     setIsSaving(true);
     const success = await spreadsheetService.saveSettings(currentUrl, settings);
     setIsSaving(false);

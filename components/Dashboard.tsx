@@ -29,9 +29,10 @@ interface DashboardProps {
   content: AppContent;
   scriptUrl?: string;
   onRefresh?: () => void;
+  onOptimisticUpdate?: (category: string, data: any, isDelete?: boolean) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, metadata, content, scriptUrl, onRefresh }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, metadata, content, scriptUrl, onRefresh, onOptimisticUpdate }) => {
   const modules = [
     { id: 'products', label: 'Products', desc: 'Inventory & Parts', icon: <Package size={24} />, mode: 'manage' as const, color: 'bg-indigo-50 text-indigo-600' },
     { id: 'services', label: 'Services', desc: 'Logistics & Offerings', icon: <Truck size={24} />, mode: 'manage' as const, color: 'bg-emerald-50 text-emerald-600' },
@@ -118,11 +119,17 @@ const Dashboard: React.FC<DashboardProps> = ({ data, metadata, content, scriptUr
     setIsSaving(true);
     try {
       const saveCategory = viewMode === 'documents' ? 'documents' : activeTab;
-      const success = await spreadsheetService.saveRecord(scriptUrl, saveCategory, formData);
+      
+      // Optimistic ID generation if new
+      const optimisticData = { ...formData };
+      if (!optimisticData.id) optimisticData.id = Date.now().toString();
+      
+      const success = await spreadsheetService.saveRecord(scriptUrl, saveCategory, optimisticData);
       
       if (success) {
+        if (onOptimisticUpdate) onOptimisticUpdate(saveCategory, optimisticData);
         // Give the cloud a moment to process before closing
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 500)); // Reduced delay since UI updates instantly
         setIsSaving(false);
         closeModal();
         setShowSuccessToast(true);
@@ -141,6 +148,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data, metadata, content, scriptUr
   const handleDelete = async (id: string) => {
     if (!scriptUrl || !confirm("CRITICAL: Are you sure you want to permanently delete this record?")) return;
     const deleteCategory = viewMode === 'documents' ? 'documents' : activeTab;
+    
+    // Optimistic delete
+    if (onOptimisticUpdate) onOptimisticUpdate(deleteCategory, { id }, true);
+    
     const success = await spreadsheetService.deleteRecord(scriptUrl, deleteCategory, id);
     if (success) {
       setShowSuccessToast(true);

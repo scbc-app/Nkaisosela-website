@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { ShieldCheck, User, Menu, X, Search, ChevronDown, LayoutDashboard, FileEdit, Settings } from 'lucide-react';
-import { AppState, SpreadsheetUrls } from './types';
+import { AppState, SpreadsheetUrls, AppContent } from './types';
 import { spreadsheetService } from './services/spreadsheetService';
 import { AuthService } from './services/authService';
 import Home from './components/Home';
@@ -164,6 +163,37 @@ const App: React.FC = () => {
     }, 1000);
   };
 
+  const handleOptimisticUpdate = (category: string, newData: any, isDelete?: boolean) => {
+    setState(prev => {
+      const newContent = { ...prev.content };
+      const catKey = category.toLowerCase() as keyof AppContent;
+      
+      if (Array.isArray(newContent[catKey])) {
+        let items = [...(newContent[catKey] as any[])];
+        if (isDelete) {
+          items = items.filter(i => i.id !== newData.id);
+        } else {
+          const idx = items.findIndex(i => i.id === newData.id);
+          if (idx >= 0) {
+            items[idx] = { ...items[idx], ...newData };
+          } else {
+            items.push(newData);
+          }
+        }
+        (newContent as any)[catKey] = items;
+      } else if (catKey === 'settings' && !isDelete) {
+        // Handle settings update
+        newContent.settings = { ...newContent.settings, [newData.key]: newData.value };
+      }
+      
+      return {
+        ...prev,
+        content: newContent,
+        data: catKey === 'products' ? (newContent.products as any) : prev.data
+      };
+    });
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-white w-full overflow-x-hidden font-['Inter']">
       <ScrollToTop />
@@ -309,11 +339,12 @@ const App: React.FC = () => {
                     content={state.content} 
                     scriptUrl={state.spreadsheetUrls.scriptUrl}
                     onRefresh={() => loadData(state.spreadsheetUrls.scriptUrl, true)}
+                    onOptimisticUpdate={handleOptimisticUpdate}
                   />
                 </div>
               ) : <Navigate to="/" />} 
             />
-            <Route path="/sync" element={state.isAuthenticated ? <div className="pt-32 px-12 pb-24"><SettingsView onUpdateUrl={(url) => loadData(url, true)} currentUrl={state.spreadsheetUrls.scriptUrl} content={state.content} /></div> : <Navigate to="/" />} />
+            <Route path="/sync" element={state.isAuthenticated ? <div className="pt-32 px-12 pb-24"><SettingsView onUpdateUrl={(url) => loadData(url, true)} currentUrl={state.spreadsheetUrls.scriptUrl} content={state.content} onOptimisticUpdate={handleOptimisticUpdate} /></div> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
