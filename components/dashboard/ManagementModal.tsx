@@ -171,45 +171,57 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
       <div className="relative w-full h-fit min-h-screen sm:min-h-0 sm:max-w-6xl bg-slate-50 sm:rounded-2xl shadow-2xl animate-in zoom-in-95 duration-500 border border-slate-200 flex flex-col mb-2">
         {/* Modal Header - Professional Toolbar matching reference */}
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 sm:rounded-t-2xl no-print">
-          <div className="flex items-center gap-1 bg-slate-200/50 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
-            <button 
-              type="button"
-              onClick={() => setDocMode('preview')}
-              className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${docMode === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Preview
-            </button>
-            <button 
-              type="button"
-              onClick={() => setDocMode('edit')}
-              className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${docMode === 'edit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Edit
-            </button>
-            <button 
-              type="button"
-              className="px-4 py-1.5 rounded-md text-[10px] font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap"
-            >
-              History
-            </button>
-          </div>
+          {activeTab === 'documents' ? (
+            <div className="flex items-center gap-1 bg-slate-200/50 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
+              <button 
+                type="button"
+                onClick={() => setDocMode('preview')}
+                className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${docMode === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Preview
+              </button>
+              <button 
+                type="button"
+                onClick={() => setDocMode('edit')}
+                className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${docMode === 'edit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Edit
+              </button>
+              <button 
+                type="button"
+                className="px-4 py-1.5 rounded-md text-[10px] font-bold text-slate-500 hover:text-slate-700 whitespace-nowrap"
+              >
+                History
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-800 capitalize">
+                {editingItem ? 'Edit' : 'Add'} {activeTab === 'gallery' ? 'Gallery Item' : activeTab === 'faqs' ? 'FAQ' : activeTab.slice(0, -1)}
+              </h2>
+            </div>
+          )}
           
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
-            <button 
-              type="button" 
-              onClick={() => setShowPaymentScheduling(true)}
-              className="px-4 py-2 bg-slate-200/50 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap"
-            >
-              Payment scheduling
-            </button>
-            <button type="button" className="px-4 py-2 bg-slate-200/50 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap">PDF</button>
+            {activeTab === 'documents' && (
+              <>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPaymentScheduling(true)}
+                  className="px-4 py-2 bg-slate-200/50 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap"
+                >
+                  Payment scheduling
+                </button>
+                <button type="button" className="px-4 py-2 bg-slate-200/50 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap">PDF</button>
+              </>
+            )}
             <button 
               type="submit"
               className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition-all shadow-sm whitespace-nowrap"
             >
               {activeTab === 'documents' ? `Email ${formData.docType || 'Invoice'}` : 'Save Record'}
             </button>
-            <button onClick={onClose} className="ml-auto sm:ml-2 p-1.5 text-slate-400 hover:text-slate-900 rounded-lg transition-all shrink-0"><X size={18} /></button>
+            <button type="button" onClick={onClose} className="ml-auto sm:ml-2 p-1.5 text-slate-400 hover:text-slate-900 rounded-lg transition-all shrink-0"><X size={18} /></button>
           </div>
         </div>
 
