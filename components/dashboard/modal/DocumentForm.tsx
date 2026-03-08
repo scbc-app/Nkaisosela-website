@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, Landmark, FileCheck, Receipt, X, Check, ChevronDown, ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Landmark, FileCheck, Receipt, X, Check, ChevronDown, ImageIcon, Upload, ArrowUp } from 'lucide-react';
 import { ImageUploadField } from './FormFields';
 
 interface LineItem {
@@ -41,16 +41,19 @@ const DocumentForm: React.FC<DocumentFormProps> = ({
   handleImageUpload, uploading, settings, mode = 'edit'
 }) => {
   const subtotal = items.reduce((acc, item) => acc + item.amount, 0);
-  let taxAmount = (subtotal * taxRate) / 100;
-  let total = subtotal;
+  const discount = Number(formData.discount || 0);
+  const shipping = Number(formData.shipping || 0);
+  
+  let taxAmount = ((subtotal - discount) * taxRate) / 100;
+  let total = subtotal - discount + taxAmount + shipping;
 
   if (taxType === 'On total') {
-    total = subtotal + taxAmount;
+    total = subtotal - discount + taxAmount + shipping;
   } else if (taxType === 'Deducted') {
-    total = subtotal - taxAmount;
+    total = subtotal - discount - taxAmount + shipping;
   } else {
     taxAmount = 0;
-    total = subtotal;
+    total = subtotal - discount + shipping;
   }
 
   const balanceDue = total - amountPaid;
@@ -58,7 +61,19 @@ const DocumentForm: React.FC<DocumentFormProps> = ({
   const docType = (formData.docType || 'Invoice');
   const isTaxInvoice = taxType !== 'None' && taxRate > 0 && docType.toLowerCase() === 'invoice';
   const displayDocType = isTaxInvoice ? 'Tax Invoice' : docType;
-  const showBankDetails = docType.toLowerCase() === 'invoice' && balanceDue > 0;
+  
+  const [useSystemBankDetails, setUseSystemBankDetails] = useState(false);
+
+  const hasBankDetails = Boolean(
+    formData.bankDetails || 
+    (useSystemBankDetails && (settings?.bankName || settings?.accountName || settings?.accountNumber))
+  );
+  const isQuote = docType.toLowerCase().includes('quot') || docType.toLowerCase().includes('proforma');
+  const isReceipt = docType.toLowerCase().includes('receipt');
+  const isFullyPaid = docType.toLowerCase() === 'invoice' && balanceDue <= 0;
+  
+  const showBankDetails = hasBankDetails && !isReceipt && (isQuote || balanceDue > 0);
+  const showDueDate = !isReceipt && !isFullyPaid;
   
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -182,170 +197,198 @@ const DocumentForm: React.FC<DocumentFormProps> = ({
 
   if (mode === 'preview') {
     return (
-      <div id="print-area" className="bg-white p-8 sm:p-16 shadow-sm min-h-[1000px] animate-in fade-in duration-500 text-slate-800 font-['Inter']">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
-          {/* Logo & Company Info */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 items-start w-full md:max-w-[60%]">
-            <div className="shrink-0">
+      <div id="document-preview-container" className="bg-white mx-auto w-[800px] min-h-[1131px] text-slate-800 font-['Inter',_sans-serif] flex flex-col relative shadow-sm border border-slate-200 box-border">
+        {/* Top Accent Line */}
+        <div className="h-4 w-full bg-slate-900"></div>
+        
+        <div className="px-12 py-12 flex-1 flex flex-col">
+          {/* Header Section */}
+          <div className="flex justify-between items-start mb-12">
+            <div className="flex flex-col max-w-[50%]">
               {siteIcon ? (
                 <img 
                   src={siteIcon} 
-                  className="h-24 sm:h-32 w-auto object-contain mix-blend-multiply" 
+                  className="h-16 w-auto object-contain mb-6" 
                   alt="Logo" 
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-100 rounded flex items-center justify-center text-slate-400 font-semibold text-xs uppercase">No Logo</div>
+                <div className="h-16 w-16 bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs mb-6 tracking-widest">LOGO</div>
               )}
-            </div>
-            <div className="space-y-1 pt-2">
-              <h1 className="text-base sm:text-lg font-semibold uppercase tracking-tight leading-tight text-slate-900">{siteName}</h1>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 uppercase tracking-wider space-y-0.5">
-                <p>{siteAddress}</p>
-                <p>Lusaka</p>
-                <p>10101</p>
-                <p>{sitePhone}</p>
-                <p>{siteEmail}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Document Meta */}
-          <div className="w-full md:w-auto text-left md:text-right space-y-4 pt-2 border-t md:border-t-0 border-slate-100 md:border-transparent mt-4 md:mt-0 md:pt-2">
-            <div className="grid grid-cols-2 md:block gap-4">
-              <div>
-                <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest">{displayDocType.toUpperCase()}</p>
-                <p className="text-sm font-semibold text-slate-900">{formData.docNumber || '---'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest">Date</p>
-                <p className="text-sm font-semibold text-slate-900">{formatDate(formData.date)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest">Due Date</p>
-                <p className="text-sm font-semibold text-slate-900">{formatDate(formData.dueDate)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest">Balance Due</p>
-                <p className="text-sm font-semibold text-slate-900">{currency} {balanceDue.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bill To Section */}
-        <div className="mb-16">
-          <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest mb-3">Bill To</p>
-          <div className="text-sm font-medium text-slate-800 whitespace-pre-line leading-relaxed">
-            {formData.clientName || 'No Client Details Provided'}
-          </div>
-        </div>
-
-        {/* Items Table */}
-        <div className="mb-12">
-          <div className="hidden md:grid grid-cols-12 gap-4 border-b border-slate-200 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-            <div className="col-span-8">Description</div>
-            <div className="col-span-2 text-right">Rate</div>
-            <div className="col-span-1 text-center">Qty</div>
-            <div className="col-span-1 text-right">Amount</div>
-          </div>
-          
-          <div className="space-y-6 pt-4 border-t border-slate-200 md:border-t-0">
-            {items.map((item) => (
-              <div key={item.id} className="flex flex-col md:grid md:grid-cols-12 gap-2 md:gap-4 items-start pb-4 border-b border-slate-100 last:border-0">
-                <div className="w-full md:col-span-8">
-                  <p className="text-sm font-medium text-slate-800">{item.description.split('\n')[0] || 'Item Name'}</p>
-                  {item.description.includes('\n') && (
-                    <p className="text-xs text-slate-500 font-normal mt-1">{item.description.split('\n').slice(1).join('\n')}</p>
-                  )}
-                </div>
-                <div className="w-full flex justify-between md:contents">
-                  <div className="md:col-span-2 md:text-right flex justify-between md:block w-full md:w-auto">
-                    <span className="md:hidden text-[10px] font-medium text-slate-400 uppercase">Rate</span>
-                    <p className="text-sm font-medium text-slate-800">{item.rate.toLocaleString()}</p>
-                  </div>
-                  <div className="md:col-span-1 md:text-center flex justify-between md:block w-full md:w-auto mt-1 md:mt-0">
-                    <span className="md:hidden text-[10px] font-medium text-slate-400 uppercase">Qty</span>
-                    <p className="text-sm font-medium text-slate-800">{item.quantity}</p>
-                  </div>
-                  <div className="md:col-span-1 md:text-right flex justify-between md:block w-full md:w-auto mt-1 md:mt-0">
-                    <span className="md:hidden text-[10px] font-medium text-slate-400 uppercase">Amount</span>
-                    <p className="text-sm font-medium text-slate-800">{item.amount.toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Totals Section */}
-        <div className="flex justify-end mb-20">
-          <div className="w-full max-w-[300px] space-y-4">
-            <div className="flex justify-between items-center text-sm font-medium text-slate-600">
-              <span>Subtotal</span>
-              <span className="text-slate-900">{subtotal.toLocaleString()}</span>
-            </div>
-            {taxType !== 'None' && (
-              <div className="flex justify-between items-center text-sm font-medium text-slate-600">
-                <span>{taxType === 'Deducted' ? 'Tax (Deducted)' : 'Tax'} ({taxRate}%)</span>
-                <span className="text-slate-900">{taxType === 'Deducted' ? '-' : ''}{taxAmount.toLocaleString()}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center text-sm font-medium text-slate-600 pt-2 border-t border-slate-100">
-              <span>Total</span>
-              <span className="text-slate-900">{total.toLocaleString()}</span>
-            </div>
-            <div className="pt-4 border-t border-slate-200">
-              <div className="flex flex-col items-end gap-1">
-                <p className="text-[10px] font-medium uppercase text-slate-500 tracking-widest">Balance Due</p>
-                <p className="text-2xl font-semibold text-slate-900">{currency} {balanceDue.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Signature & Footer */}
-        <div className="flex flex-col md:grid md:grid-cols-2 gap-8 md:gap-12 items-start md:items-end">
-          <div className="space-y-8 w-full">
-            <div className="pt-12">
-              {docType.toLowerCase() === 'invoice' && (
-                <p className="text-[10px] font-medium text-slate-500 italic mb-4">Certified that the particulars given above are true and correct.</p>
-              )}
-              <div className="w-full max-w-[12rem] h-20 border-b border-slate-300 mb-3 flex items-end justify-center relative">
-                {signatureUrl ? (
-                  <img src={signatureUrl} alt="Signature" className="max-h-full max-w-full object-contain" />
-                ) : (
-                  <div className="font-serif italic text-xl text-slate-300 opacity-40 select-none">Authorized Signature</div>
+              <div className="text-[13px] text-slate-600 whitespace-pre-line leading-relaxed">
+                {formData.companyDetails ? formData.companyDetails : (
+                  <>
+                    <span className="font-bold text-slate-900 text-base block mb-1">{siteName}</span>
+                    {siteAddress}
+                    <br />{sitePhone}
+                    <br />{siteEmail}
+                  </>
                 )}
               </div>
-              <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest mb-1">Date Signed</p>
-              <p className="text-sm font-medium text-slate-800">{formatDate(formData.date)}</p>
             </div>
             
-            <div>
-              <div className="text-xs font-normal text-slate-500 italic max-w-xs mb-6">
-                {formData.terms || 'No additional notes provided.'}
+            <div className="text-right flex flex-col items-end">
+              <h1 className="text-4xl font-bold text-slate-900 uppercase tracking-widest mb-2">
+                {displayDocType}
+              </h1>
+              <div className="text-sm text-slate-500 mb-8 font-medium tracking-widest uppercase">
+                {formData.docNumber || '---'}
               </div>
               
+              <table className="text-[13px] text-right border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="py-1 pr-4 font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Date</td>
+                    <td className="py-1 text-slate-900 font-medium">{formatDate(formData.date)}</td>
+                  </tr>
+                  {formData.dueDate && showDueDate && (
+                    <tr>
+                      <td className="py-1 pr-4 font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Due Date</td>
+                      <td className="py-1 text-slate-900 font-medium">{formatDate(formData.dueDate)}</td>
+                    </tr>
+                  )}
+                  {formData.poNumber && (
+                    <tr>
+                      <td className="py-1 pr-4 font-semibold text-slate-500 uppercase tracking-wider text-[10px]">PO Number</td>
+                      <td className="py-1 text-slate-900 font-medium">{formData.poNumber}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bill To Section */}
+          <div className="mb-12">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">Bill To</h3>
+            <div className="text-[13px] text-slate-900 whitespace-pre-line leading-relaxed font-medium">
+              {formData.clientName || '---'}
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <div className="mb-10">
+            <table className="w-full text-[13px] border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-y border-slate-200">
+                  <th className="py-3 px-4 text-left font-bold text-slate-700 uppercase tracking-wider text-[10px] w-1/2">Description</th>
+                  <th className="py-3 px-4 text-right font-bold text-slate-700 uppercase tracking-wider text-[10px]">Rate</th>
+                  <th className="py-3 px-4 text-right font-bold text-slate-700 uppercase tracking-wider text-[10px]">Qty</th>
+                  <th className="py-3 px-4 text-right font-bold text-slate-700 uppercase tracking-wider text-[10px]">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr key={item.id} className="border-b border-slate-100">
+                    <td className="py-4 px-4 text-left align-top">
+                      <p className="font-semibold text-slate-900">{item.description.split('\n')[0] || 'Item Name'}</p>
+                      {item.description.includes('\n') && (
+                        <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-line leading-relaxed">{item.description.split('\n').slice(1).join('\n')}</p>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-right text-slate-700 align-top">{item.rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-4 px-4 text-right text-slate-700 align-top">{item.quantity}</td>
+                    <td className="py-4 px-4 text-right text-slate-900 font-semibold align-top">{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals Section */}
+          <div className="flex justify-end mb-16">
+            <div className="w-full sm:w-1/2 min-w-[300px]">
+              <table className="w-full text-[13px] border-collapse">
+                <tbody>
+                  <tr className="border-b border-slate-100">
+                    <td className="py-3 px-4 text-left font-medium text-slate-500">Subtotal</td>
+                    <td className="py-3 px-4 text-right text-slate-900 font-medium">{currency} {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                  {discount > 0 && (
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-4 text-left font-medium text-slate-500">Discount</td>
+                      <td className="py-3 px-4 text-right text-slate-900 font-medium">-{currency} {discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  )}
+                  {taxRate > 0 && (
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-4 text-left font-medium text-slate-500">Tax ({taxRate}%)</td>
+                      <td className="py-3 px-4 text-right text-slate-900 font-medium">{currency} {taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  )}
+                  {shipping > 0 && (
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-4 text-left font-medium text-slate-500">Shipping</td>
+                      <td className="py-3 px-4 text-right text-slate-900 font-medium">{currency} {shipping.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  )}
+                  <tr className="bg-slate-50">
+                    <td className="py-4 px-4 text-left font-bold text-slate-900 text-base border-t border-slate-200">Total</td>
+                    <td className="py-4 px-4 text-right font-bold text-slate-900 text-base border-t border-slate-200">{currency} {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                  {amountPaid > 0 && (
+                    <>
+                      <tr className="border-b border-slate-100">
+                        <td className="py-3 px-4 text-left font-medium text-slate-500">Amount Paid</td>
+                        <td className="py-3 px-4 text-right text-slate-900 font-medium">-{currency} {amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <td className="py-4 px-4 text-left font-bold text-slate-900 text-base border-t border-slate-200">Balance Due</td>
+                        <td className="py-4 px-4 text-right font-bold text-slate-900 text-base border-t border-slate-200">{currency} {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Footer Section (Terms, Bank, Signature) */}
+          <div className="mt-auto pt-8 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-end gap-8">
+            <div className="flex-1 space-y-6 w-full">
+              {formData.terms && (
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Terms & Conditions</h4>
+                  <div className="text-[11px] text-slate-600 whitespace-pre-line leading-relaxed">
+                    {formData.terms}
+                  </div>
+                </div>
+              )}
+              
               {showBankDetails && (
-                <div className="pt-4 border-t border-slate-100">
-                  <p className="text-[10px] font-medium uppercase text-slate-400 tracking-widest mb-2">Payment Details</p>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p><span className="font-semibold text-slate-800">Bank:</span> {settings?.bankName || 'Zambia National Commercial Bank (ZANACO)'}</p>
-                    <p><span className="font-semibold text-slate-800">Account Name:</span> {settings?.accountName || siteName}</p>
-                    <p><span className="font-semibold text-slate-800">Account No:</span> {settings?.accountNumber || '1234567890'}</p>
-                    <p><span className="font-semibold text-slate-800">Branch:</span> {settings?.branchCode || 'Kapiri Mposhi'}</p>
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Payment Details</h4>
+                  <div className="text-[11px] text-slate-600 space-y-1">
+                    {formData.bankDetails && (
+                      <div className="whitespace-pre-line mb-3">{formData.bankDetails}</div>
+                    )}
+                    {useSystemBankDetails && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-lg">
+                        {settings?.bankName && <div className="flex justify-between sm:justify-start sm:gap-2"><span className="font-semibold text-slate-700">Bank:</span> <span>{settings.bankName}</span></div>}
+                        {settings?.accountName && <div className="flex justify-between sm:justify-start sm:gap-2"><span className="font-semibold text-slate-700">Account Name:</span> <span>{settings.accountName}</span></div>}
+                        {settings?.accountNumber && <div className="flex justify-between sm:justify-start sm:gap-2"><span className="font-semibold text-slate-700">Account No:</span> <span>{settings.accountNumber}</span></div>}
+                        {settings?.branchCode && <div className="flex justify-between sm:justify-start sm:gap-2"><span className="font-semibold text-slate-700">Branch:</span> <span>{settings.branchCode}</span></div>}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
-          </div>
-          {documentPhotoUrl && (
-            <div className="flex justify-start md:justify-end w-full">
-              <img src={documentPhotoUrl} alt="Attachment" className="max-w-full md:max-w-[200px] max-h-[200px] object-contain rounded-lg shadow-sm border border-slate-200" />
+
+            <div className="flex flex-col items-end justify-end space-y-6 shrink-0 w-full sm:w-auto mt-8 sm:mt-0">
+              {signatureUrl && (
+                <div className="flex flex-col items-center">
+                  <img src={signatureUrl} alt="Signature" className="h-16 object-contain mb-2" />
+                  <div className="w-48 border-t border-slate-300 text-center pt-2">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Authorized Signature</p>
+                  </div>
+                </div>
+              )}
+              {documentPhotoUrl && (
+                <img src={documentPhotoUrl} alt="Attachment" className="w-24 h-24 object-contain rounded border border-slate-200" />
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
@@ -353,365 +396,283 @@ const DocumentForm: React.FC<DocumentFormProps> = ({
 
   // Edit Mode - Professional Layout matching reference
   return (
-    <div className="bg-white p-8 sm:p-12 min-h-screen animate-in fade-in duration-500 font-['Inter'] text-slate-700">
-      {/* Top Header: Doc Type & Logo */}
-      <div className="flex justify-between items-start mb-12">
-        <div className="w-full max-w-md">
-          <input 
-            type="text"
-            name="docType"
-            value={formData.docType || 'Invoice'}
-            onChange={handleInputChange}
-            className="w-full text-3xl font-bold text-slate-900 border border-slate-200 p-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-          />
-        </div>
-        <div className="shrink-0">
-          <ImageUploadField label="Logo" value={siteIcon} onUpload={handleImageUpload} loading={uploading} compact />
-        </div>
-      </div>
+    <div className="bg-white p-8 sm:p-12 min-h-screen animate-in fade-in duration-500 font-['Inter'] text-slate-700 max-w-5xl mx-auto">
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        {/* Left Column */}
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{docType} number</label>
+              <input 
+                type="text"
+                name="docNumber"
+                value={formData.docNumber || ''}
+                onChange={handleInputChange}
+                className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Purchase order</label>
+              <input 
+                type="text"
+                name="poNumber"
+                value={formData.poNumber || ''}
+                onChange={handleInputChange}
+                className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+              />
+            </div>
+          </div>
 
-      {/* From & Bill To Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 mb-12">
-        {/* From Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">From</h3>
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Name</label>
-              <input value={siteName} readOnly className="sm:col-span-2 w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Email</label>
-              <div className="sm:col-span-2 relative w-full">
-                <input value={siteEmail} readOnly className="w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600 pr-8" />
-                <Check size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500 pt-2">Address</label>
-              <div className="sm:col-span-2 space-y-2 w-full">
-                <input value={siteAddress} readOnly className="w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-                <input value="Lusaka" readOnly className="w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-                <input value="10101" readOnly className="w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Phone</label>
-              <input value={sitePhone} readOnly className="sm:col-span-2 w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Business Number</label>
-              <input value={siteName} readOnly className="sm:col-span-2 w-full bg-slate-50 border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600" />
-            </div>
-            <button type="button" className="text-[10px] font-bold text-indigo-600 hover:underline">Show additional business details</button>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Your company details</label>
+            <textarea 
+              name="companyDetails"
+              value={formData.companyDetails !== undefined ? formData.companyDetails : `${siteName}\n${siteAddress}\n${sitePhone}\n${siteEmail}`}
+              onChange={handleInputChange}
+              className="w-full border border-slate-300 p-2.5 rounded-md text-sm h-32 resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
           </div>
-        </div>
 
-        {/* Bill To Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">Bill To</h3>
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Name</label>
-              <div className="sm:col-span-2 relative w-full">
-                <input 
-                  name="clientName"
-                  value={formData.clientName || ''}
-                  onChange={handleInputChange}
-                  className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 pr-8 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" 
-                />
-                <X size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Email</label>
-              <div className="sm:col-span-2 relative w-full">
-                <input 
-                  name="clientEmail"
-                  value={formData.clientEmail || ''}
-                  onChange={handleInputChange}
-                  className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 pr-8 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" 
-                />
-                <Check size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500 pt-2">Address</label>
-              <div className="sm:col-span-2 space-y-2 w-full">
-                <input name="clientAddress" value={formData.clientAddress || ''} onChange={handleInputChange} className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-                <input name="clientCity" value={formData.clientCity || ''} onChange={handleInputChange} className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-                <input name="clientZip" value={formData.clientZip || ''} onChange={handleInputChange} className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Phone</label>
-              <input name="clientPhone" value={formData.clientPhone || ''} onChange={handleInputChange} className="sm:col-span-2 w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Mobile</label>
-              <input name="clientMobile" value={formData.clientMobile || ''} onChange={handleInputChange} placeholder="(123) 456 789" className="sm:col-span-2 w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-1 sm:gap-4">
-              <label className="text-xs font-medium text-slate-500">Fax</label>
-              <input name="clientFax" value={formData.clientFax || ''} onChange={handleInputChange} placeholder="(123) 456 789" className="sm:col-span-2 w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Document Meta Section */}
-      <div className="border-t border-slate-100 pt-8 mb-12">
-        <div className="w-full md:max-w-sm space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-2 sm:gap-4">
-            <label className="text-xs font-medium text-slate-500">Number</label>
-            <div className="sm:col-span-2 relative w-full">
-              <input name="docNumber" value={formData.docNumber || ''} onChange={handleInputChange} className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 pr-8 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-              <Check size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-2 sm:gap-4">
-            <label className="text-xs font-medium text-slate-500">Date</label>
-            <input type="date" name="date" value={formData.date || ''} onChange={handleInputChange} className="sm:col-span-2 w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-2 sm:gap-4">
-            <label className="text-xs font-medium text-slate-500">Terms</label>
-            <div className="sm:col-span-2 relative w-full">
-              <select name="terms" value={formData.terms || '3 Days'} onChange={handleInputChange} className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 appearance-none focus:ring-2 focus:ring-indigo-500/10 focus:outline-none">
-                <option>3 Days</option>
-                <option>7 Days</option>
-                <option>15 Days</option>
-                <option>30 Days</option>
-                <option>Due on Receipt</option>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+            <div className="relative">
+              <select 
+                name="currency"
+                value={formData.currency || currency}
+                onChange={handleInputChange}
+                className="w-full border border-slate-300 p-2.5 rounded-md text-sm appearance-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all bg-white"
+              >
+                <option value="USD">🇺🇸 US dollar</option>
+                <option value="ZMW">🇿🇲 Zambian Kwacha</option>
+                <option value="EUR">🇪🇺 Euro</option>
+                <option value="GBP">🇬🇧 British Pound</option>
               </select>
-              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 items-start sm:items-center gap-2 sm:gap-4">
-            <label className="text-xs font-medium text-slate-500">Due</label>
-            <input type="date" name="dueDate" value={formData.dueDate || ''} onChange={handleInputChange} className="sm:col-span-2 w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none" />
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Logo</label>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handlePhotoUpload} 
+              accept="image/*" 
+              className="hidden" 
+            />
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border border-slate-300 rounded-md p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-all h-[72px]"
+            >
+              <div className="w-8 h-8 flex items-center justify-center">
+                {siteIcon ? (
+                  <img src={siteIcon} alt="Logo" className="max-w-full max-h-full object-contain grayscale" />
+                ) : (
+                  <Upload size={20} className="text-slate-600" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700 hover:underline decoration-slate-400 underline-offset-2">Upload file</p>
+                <p className="text-xs text-slate-500">JPG, JPEG, PNG, less than 5MB</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Bill to</label>
+            <textarea 
+              name="clientName"
+              value={formData.clientName || ''}
+              onChange={handleInputChange}
+              className="w-full border border-slate-300 p-2.5 rounded-md text-sm h-32 resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{docType} date</label>
+              <div className="relative">
+                <input 
+                  type="date"
+                  name="date"
+                  value={formData.date || ''}
+                  onChange={handleInputChange}
+                  className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+            {showDueDate && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Due date</label>
+                <div className="relative">
+                  <input 
+                    type="date"
+                    name="dueDate"
+                    value={formData.dueDate || ''}
+                    onChange={handleInputChange}
+                    className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Items Table Section */}
-      <div className="mb-8">
-        <div className="hidden md:grid grid-cols-12 gap-4 border-t border-b border-slate-200 py-2 mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-          <div className="col-span-1"></div>
-          <div className="col-span-7">Description</div>
-          <div className="col-span-2 text-right">Rate</div>
-          <div className="col-span-1 text-center">Qty</div>
-          <div className="col-span-1 text-right">Amount</div>
+      {/* Items Section */}
+      <div className="bg-[#f2f4f2] rounded-lg p-6 mb-8">
+        <div className="hidden md:grid grid-cols-12 gap-4 mb-2 text-sm font-medium text-slate-700">
+          <div className="col-span-6">Item description</div>
+          <div className="col-span-2">Unit cost</div>
+          <div className="col-span-2">Quantity</div>
+          <div className="col-span-2">Amount</div>
         </div>
 
-        <div className="space-y-8 md:space-y-4">
-          {items.map((item) => (
-            <div key={item.id} className="space-y-4 border border-slate-200 md:border-none p-4 md:p-0 rounded-lg md:rounded-none bg-slate-50/50 md:bg-transparent">
-              <div className="flex flex-col md:grid md:grid-cols-12 gap-4 items-start md:items-center">
-                <div className="w-full md:col-span-1 flex justify-between md:justify-center items-center">
-                  <span className="md:hidden text-xs font-bold text-slate-500 uppercase">Item</span>
-                  <button type="button" onClick={() => removeLineItem(item.id)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md transition-all">
-                    <X size={16} />
-                  </button>
-                </div>
-                <div className="w-full md:col-span-7">
-                  <input 
-                    value={item.description.split('\n')[0] || ''} 
-                    onChange={(e) => {
-                      const lines = item.description.split('\n');
-                      lines[0] = e.target.value;
-                      updateLineItem(item.id, 'description', lines.join('\n'));
-                    }}
-                    placeholder="Item name"
-                    className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500/10 focus:outline-none"
-                  />
-                </div>
-                <div className="w-full md:col-span-2">
-                  <div className="flex items-center gap-2 md:block">
-                    <span className="md:hidden text-xs font-medium text-slate-500 w-16">Rate</span>
-                    <input 
-                      type="number"
-                      value={item.rate ?? 0}
-                      onChange={(e) => updateLineItem(item.id, 'rate', e.target.value)}
-                      className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 md:text-right focus:ring-2 focus:ring-indigo-500/10 focus:outline-none"
-                    />
-                  </div>
-                </div>
-                <div className="w-full md:col-span-1">
-                  <div className="flex items-center gap-2 md:block">
-                    <span className="md:hidden text-xs font-medium text-slate-500 w-16">Qty</span>
-                    <input 
-                      type="number"
-                      value={item.quantity ?? 1}
-                      onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
-                      className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-900 md:text-center focus:ring-2 focus:ring-indigo-500/10 focus:outline-none"
-                    />
-                  </div>
-                </div>
-                <div className="w-full md:col-span-1">
-                  <div className="flex items-center justify-between md:block md:text-right">
-                    <span className="md:hidden text-xs font-bold text-slate-500 uppercase">Amount</span>
-                    <span className="text-xs font-bold text-slate-900">{currency} {(item.amount || 0).toLocaleString()}</span>
-                  </div>
-                </div>
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <div className="md:col-span-6">
+                <span className="md:hidden text-xs font-medium text-slate-500 mb-1 block">Item description</span>
+                <input 
+                  value={item.description}
+                  onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                  className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none bg-white"
+                />
               </div>
-              <div className="flex flex-col md:grid md:grid-cols-12 gap-4">
-                <div className="hidden md:block col-span-1"></div>
-                <div className="w-full md:col-span-7 relative">
-                  <textarea 
-                    value={item.description.split('\n').slice(1).join('\n') || ''}
-                    onChange={(e) => {
-                      const lines = item.description.split('\n');
-                      const title = lines[0] || '';
-                      updateLineItem(item.id, 'description', `${title}\n${e.target.value}`);
-                    }}
-                    placeholder="Item description"
-                    className="w-full border border-slate-200 p-2 rounded-md text-xs font-medium text-slate-600 h-24 resize-none focus:ring-2 focus:ring-indigo-500/10 focus:outline-none"
-                  />
-                  <span className="absolute bottom-2 right-2 text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-                    {(item.description.split('\n').slice(1).join('\n').length)}/5000
-                  </span>
+              <div className="md:col-span-2">
+                <span className="md:hidden text-xs font-medium text-slate-500 mb-1 block">Unit cost</span>
+                <input 
+                  type="number"
+                  value={item.rate || ''}
+                  onChange={(e) => updateLineItem(item.id, 'rate', e.target.value)}
+                  className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none bg-white"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <span className="md:hidden text-xs font-medium text-slate-500 mb-1 block">Quantity</span>
+                <input 
+                  type="number"
+                  value={item.quantity || ''}
+                  onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
+                  className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none bg-white"
+                />
+              </div>
+              <div className="md:col-span-2 flex items-center gap-3">
+                <div className="flex-1 border border-slate-300 p-2.5 rounded-md text-sm bg-white text-slate-700">
+                  {item.amount.toLocaleString()}
                 </div>
+                <button type="button" className="text-slate-400 hover:text-slate-600 hidden md:block">
+                  <ArrowUp size={18} />
+                </button>
+                <button type="button" onClick={() => removeLineItem(item.id)} className="w-8 h-8 rounded-full bg-[#e6ece6] flex items-center justify-center text-slate-600 hover:bg-[#d5e0d5] transition-colors shrink-0">
+                  <X size={16} />
+                </button>
               </div>
             </div>
           ))}
         </div>
 
-        <button type="button" onClick={addLineItem} className="mt-6 p-2 bg-slate-800 hover:bg-slate-900 text-white rounded-md transition-all">
-          <Plus size={16} />
-        </button>
+        <div className="mt-6 flex flex-col items-center justify-center">
+          <button type="button" onClick={addLineItem} className="w-10 h-10 rounded-full bg-[#95e875] flex items-center justify-center text-slate-800 hover:bg-[#85d865] transition-colors mb-2">
+            <Plus size={20} />
+          </button>
+          <span className="text-sm font-medium text-slate-700">Add item</span>
+        </div>
       </div>
 
-      {/* Totals Section */}
-      <div className="flex justify-end mb-12 border-t border-slate-100 pt-8">
-        <div className="w-full md:max-w-[300px] space-y-4">
-          <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
-            <span className="text-slate-400">Subtotal</span>
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes / payment terms</label>
+            <textarea 
+              name="terms"
+              value={formData.terms || ''}
+              onChange={handleInputChange}
+              placeholder="Payment is due within 15 days"
+              className="w-full border border-slate-300 p-2.5 rounded-md text-sm h-32 resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Bank account details</label>
+            <textarea 
+              name="bankDetails"
+              value={formData.bankDetails || ''}
+              onChange={handleInputChange}
+              placeholder="Enter manual bank details here (optional)..."
+              className="w-full border border-slate-300 p-2.5 rounded-md text-sm h-32 resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="useSystemBankDetails"
+                checked={useSystemBankDetails}
+                onChange={(e) => setUseSystemBankDetails(e.target.checked)}
+                className="w-4 h-4 text-green-600 rounded border-slate-300 focus:ring-green-500 cursor-pointer"
+              />
+              <label htmlFor="useSystemBankDetails" className="text-sm text-slate-600 cursor-pointer select-none">
+                Include system bank details (saved in Settings)
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-6">
+          <div className="flex justify-between items-center text-sm text-slate-600">
+            <span>Subtotal</span>
             <span>{currency} {subtotal.toLocaleString()}</span>
           </div>
-          {taxType !== 'None' && (
-            <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
-              <span className="text-slate-400">{taxType === 'Deducted' ? 'Tax (Deducted)' : 'Tax'} ({taxRate}%)</span>
-              <span>{taxType === 'Deducted' ? '-' : ''}{currency} {taxAmount.toLocaleString()}</span>
-            </div>
-          )}
-          <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest pt-2 border-t border-slate-100">
-            <span className="text-slate-400">Total</span>
-            <span>{currency} {total.toLocaleString()}</span>
-          </div>
-          <div className="pt-4 border-t border-slate-200">
-            <div className="flex flex-col items-end gap-1">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Balance Due</p>
-              <p className="text-2xl font-black uppercase">{currency} {balanceDue.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Notes Section */}
-      <div className="space-y-4 mb-12">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Notes</h3>
-        <div className="relative">
-          <textarea 
-            name="terms"
-            value={formData.terms || ''}
-            onChange={handleInputChange}
-            className="w-full border border-slate-200 p-4 rounded-md text-xs font-medium text-slate-600 h-48 resize-none focus:ring-2 focus:ring-indigo-500/10 focus:outline-none"
-            placeholder="Notes..."
-          />
-          <span className="absolute bottom-2 right-2 text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-            {(formData.terms || '').length}/5000
-          </span>
-        </div>
-      </div>
-
-      {/* Signature Section */}
-      <div className="space-y-4 mb-12">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Signature</h3>
-        {signatureUrl ? (
-          <div className="w-full max-w-[16rem] h-32 border border-slate-200 rounded-lg flex items-center justify-center bg-slate-50 p-2 relative group">
-            <img src={signatureUrl} alt="Signature" className="max-h-full max-w-full object-contain" />
-            <button 
-              type="button" 
-              onClick={() => setSignatureUrl && setSignatureUrl('')}
-              className="absolute top-2 right-2 p-1.5 bg-white text-red-500 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ) : showSignaturePad ? (
-          <div className="w-full max-w-md border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-600">Draw Signature</span>
-              <button type="button" onClick={() => setShowSignaturePad(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="w-full overflow-hidden touch-none">
-              <canvas
-                ref={canvasRef}
-                width={400}
-                height={200}
-                className="w-full h-[200px] bg-white cursor-crosshair touch-none"
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
+          
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-slate-600 w-32">Tax %</span>
+            <div className="relative flex-1">
+              <input 
+                type="number"
+                value={taxRate || ''}
+                onChange={(e) => setTaxRate(Number(e.target.value))}
+                className="w-full border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all pr-8"
               />
-            </div>
-            <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-between items-center">
-              <button type="button" onClick={clearSignature} className="text-xs font-bold text-slate-500 hover:text-slate-700">
-                Clear
-              </button>
-              <button type="button" onClick={saveSignature} className="px-4 py-2 bg-slate-900 text-white rounded-md text-xs font-bold shadow-sm">
-                Save Signature
-              </button>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">%</span>
             </div>
           </div>
-        ) : (
-          <button 
-            type="button" 
-            onClick={() => setShowSignaturePad(true)}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-all text-xs font-bold flex items-center gap-2 w-fit"
-          >
-            <Plus size={14} /> Add Signature
-          </button>
-        )}
+
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-slate-600 w-32">Discount ({currency})</span>
+            <input 
+              type="number"
+              name="discount"
+              value={formData.discount || ''}
+              onChange={handleInputChange}
+              className="flex-1 border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-slate-600 w-32">Shipping fee</span>
+            <input 
+              type="number"
+              name="shipping"
+              value={formData.shipping || ''}
+              onChange={handleInputChange}
+              className="flex-1 border border-slate-300 p-2.5 rounded-md text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex justify-between items-center pt-4">
+            <span className="text-base font-bold text-slate-900">Total</span>
+            <span className="text-xl font-bold text-slate-900">{currency} {total.toLocaleString()}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Photos Section */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Photos</h3>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={handlePhotoUpload} 
-          accept="image/*" 
-          className="hidden" 
-        />
-        {documentPhotoUrl ? (
-          <div className="relative w-48 h-48 group">
-            <img src={documentPhotoUrl} alt="Document Photo" className="w-full h-full object-cover rounded-lg border border-slate-200" />
-            <button 
-              type="button" 
-              onClick={() => setDocumentPhotoUrl && setDocumentPhotoUrl('')}
-              className="absolute top-2 right-2 p-1.5 bg-white text-red-500 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ) : (
-          <div 
-            onClick={() => fileInputRef.current?.click()}
-            className="w-32 h-24 border border-slate-200 rounded-md flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-all"
-          >
-            <ImageIcon size={20} className="text-slate-400" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Add Photo</span>
-          </div>
-        )}
-      </div>
+      <button type="submit" className="w-full bg-[#95e875] hover:bg-[#85d865] text-slate-900 font-semibold py-3 rounded-full transition-colors">
+        Create the {docType.toLowerCase()}
+      </button>
+
     </div>
   );
 };

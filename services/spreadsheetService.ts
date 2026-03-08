@@ -1,3 +1,4 @@
+
 import { SheetRow, SheetMetadata, AppContent, SpreadsheetUrls } from "../types";
 
 export class SpreadsheetService {
@@ -19,17 +20,11 @@ export class SpreadsheetService {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        // Add origin to the payload
-        const payloadWithOrigin = {
-          ...payload,
-          origin: window.location.origin
-        };
-
         await fetch(url, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payloadWithOrigin),
+          body: JSON.stringify(payload),
           signal: controller.signal
         });
         
@@ -65,11 +60,7 @@ export class SpreadsheetService {
     if (!url) throw new Error("Cloud Proxy URL is not configured");
     
     try {
-      // Add origin as query parameter for GET request
-      const origin = window.location.origin;
-      const urlWithOrigin = `${url}?origin=${encodeURIComponent(origin)}`;
-      
-      const response = await fetch(urlWithOrigin);
+      const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to connect to spreadsheet cloud");
       const db = await response.json();
 
@@ -161,7 +152,17 @@ export class SpreadsheetService {
           imageUrl: r.imageUrl || r.ImageUrl || r.Image || r.image || '',
           description: r.description || r.Description || ''
         })),
-        documents: (db.documents || db.Documents || []).map((r: any, i: number) => ({ ...r, id: r.id || i.toString() })),
+        documents: (db.documents || db.Documents || []).map((r: any, i: number) => ({ 
+          ...r, 
+          id: r.id || i.toString(),
+          docType: r.docType || r.DocType || '',
+          docNumber: r.docNumber || r.DocNumber || '',
+          clientName: r.clientName || r.ClientName || r.Customer || r.customer || '',
+          date: r.date || r.Date || r.timestamp || r.Timestamp || r.createdAt || r.CreatedAt || '',
+          amount: r.amount || r.Amount || r.total || r.Total || r.totalAmount || r.TotalAmount || '',
+          status: r.status || r.Status || '',
+          description: r.description || r.Description || ''
+        })),
         settings: (db.settings || db.Settings || []).reduce((acc: any, r: any) => {
           const k = r.key || r.Key || r.Setting || r.setting;
           const v = r.value || r.Value || r.Content || r.content;

@@ -81,6 +81,12 @@ const ManagementSection: React.FC<ManagementSectionProps> = ({
     return 'bg-slate-50 text-slate-600 border-slate-100';
   };
 
+  const safeFormatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const docTypes = ['Invoice', 'Quotation', 'Receipt'];
 
   return (
@@ -172,8 +178,9 @@ const ManagementSection: React.FC<ManagementSectionProps> = ({
           <div className="col-span-4">{activeTab === 'documents' ? 'Customer' : 'Item'}</div>
           <div className="col-span-2">{activeTab === 'documents' ? 'Ref' : 'Category'}</div>
           <div className="col-span-2">Date</div>
-          <div className="col-span-2">Status</div>
-          <div className="col-span-2 text-right">Actions</div>
+          <div className={activeTab === 'documents' ? 'col-span-2' : 'col-span-2'}>{activeTab === 'documents' ? 'Total' : 'Status'}</div>
+          <div className={activeTab === 'documents' ? 'col-span-1 text-right' : 'col-span-2 text-right'}>{activeTab === 'documents' ? 'Status' : 'Actions'}</div>
+          {activeTab === 'documents' && <div className="col-span-1 text-right">Actions</div>}
         </div>
 
         <div className="divide-y divide-slate-100">
@@ -205,7 +212,7 @@ const ManagementSection: React.FC<ManagementSectionProps> = ({
                   </h4>
                   {/* Mobile-only sub-info */}
                   <div className="md:hidden flex items-center gap-2 mt-0.5">
-                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">{item.date || '-'}</span>
+                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">{safeFormatDate(item.date)}</span>
                     {activeTab === 'documents' && (
                       <span className={`text-[7px] font-black uppercase ${getStatusStyle(item.status, item.docType).split(' ')[1]}`}>
                         {item.status || 'Active'}
@@ -224,15 +231,15 @@ const ManagementSection: React.FC<ManagementSectionProps> = ({
 
               {/* Date / Registration */}
               <div className="hidden md:col-span-2 text-[10px] font-medium text-slate-500">
-                {item.date || '-'}
+                {safeFormatDate(item.date)}
               </div>
 
-              {/* Status / Value */}
+              {/* Status / Value / Total */}
               <div className="hidden md:col-span-2">
                 {activeTab === 'documents' ? (
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(item.status, item.docType)}`}>
-                    {item.status || 'Active'}
-                  </span>
+                  <p className="text-[10px] font-black text-slate-900">
+                    {item.amount ? `K ${Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                  </p>
                 ) : (
                   <p className="text-[10px] font-black text-slate-900">
                     {item.Price ? `K ${Number(item.Price).toLocaleString()}` : (item.Status || 'Active')}
@@ -240,8 +247,17 @@ const ManagementSection: React.FC<ManagementSectionProps> = ({
                 )}
               </div>
 
+              {/* Extra column for Documents Status */}
+              {activeTab === 'documents' && (
+                <div className="hidden md:col-span-1 text-right">
+                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(item.status, item.docType)}`}>
+                    {item.status || 'Active'}
+                  </span>
+                </div>
+              )}
+
               {/* Actions */}
-              <div className="col-span-2 md:col-span-2 flex items-center justify-end gap-2">
+              <div className={`col-span-2 ${activeTab === 'documents' ? 'md:col-span-1' : 'md:col-span-2'} flex items-center justify-end gap-2`}>
                 <div className="relative flex items-center gap-1">
                   <button 
                     onClick={() => openModal(item)} 
